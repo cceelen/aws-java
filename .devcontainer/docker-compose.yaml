@@ -1,0 +1,61 @@
+version: '3.9'
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/java:0-17
+    volumes:
+      - ..:/workspace:cached
+    network_mode: service:localstack
+    command: sleep infinity
+
+  localstack:
+    container_name: aws
+    image: localstack/localstack
+    ports:
+      - "4566-4599:4566-4599"
+      - "81-84:81-84"
+      - "${PORT_WEB_UI-8080}:${PORT_WEB_UI-8080}"
+    environment:
+      # - SERVICES=sqs,lambda
+      - SERVICES=s3:81,sqs:82,ses:83,lambda:84
+      - LOCALSTACK_HOSTNAME=aws
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOCALSTACK_HOSTNAME=localhost
+      - TEST_AWS_ACCOUNT_ID=000000000000
+      - AWS_DEFAULT_REGION=us-west-2
+      - EAGER_SERVICE_LOADING=1
+      # - DATA_DIR=${DATA_DIR- }
+      # - PORT_WEB_UI=${PORT_WEB_UI- }
+      # - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR- }
+      # - KINESIS_ERROR_PROBABILITY=${KINESIS_ERROR_PROBABILITY- }
+    volumes:
+      - temp:/tmp/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    restart: unless-stopped
+    networks: 
+      aws:
+        ipv4_address: 172.16.238.10
+        ipv6_address: 2001:3984:3989::10
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - awslocal dynamodb list-tables
+          && awslocal es list-domain-names
+          && awslocal s3 ls
+          && awslocal sqs list-queues
+      interval: 5s
+      timeout: 10s
+      start_period: 10s
+
+networks:
+  aws:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.16.238.0/24"
+        - subnet: "2001:3984:3989::/64"
+
+volumes:
+  temp:
